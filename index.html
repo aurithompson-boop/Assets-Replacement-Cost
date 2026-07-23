@@ -11,6 +11,8 @@
         <link rel="stylesheet" href="css/qgis2web.css">
         <link rel="stylesheet" href="css/fontawesome-all.min.css">
         <link rel="stylesheet" href="css/leaflet.photon.css">
+        <!-- Chart.js CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <title>Tongatapu Infrastructure Asset Replacement Cost Valuation</title>
         <style>
             #map {
@@ -21,39 +23,82 @@
                 position: absolute;
                 bottom: 20px;
                 right: 20px;
-                width: 310px;
+                width: 240px;
                 background: rgba(255, 255, 255, 0.95);
                 border: 1px solid #b0b0b0;
                 border-radius: 8px;
-                padding: 12px 15px;
+                padding: 10px 12px;
                 font-family: Arial, sans-serif;
-                font-size: 13px;
+                font-size: 12px;
                 color: #333;
-                line-height: 1.5;
+                line-height: 1.4;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                 z-index: 1000;
+            }
+            #instructions-header {
+                font-weight: bold;
+                color: #0b5ea8;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            #instructions-content {
+                display: none;
+                margin-top: 8px;
+            }
+            #chart-widget {
+                position: absolute;
+                bottom: 20px;
+                left: 20px;
+                width: 280px;
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid #b0b0b0;
+                border-radius: 8px;
+                padding: 12px;
+                font-family: Arial, sans-serif;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                z-index: 1000;
+            }
+            #chart-widget h4 {
+                margin: 0 0 8px 0;
+                font-size: 13px;
+                color: #0b5ea8;
+                text-align: center;
             }
         </style>
     </head>
     <body>
-        <div style="text-align:center; background:#ffffff; padding:15px; border-bottom:2px solid #0b5ea8; font-family:Arial, sans-serif;">
-            <h2 style="margin:0; color:#0b5ea8;">
+        <div style="text-align:center; background:#ffffff; padding:12px; border-bottom:2px solid #0b5ea8; font-family:Arial, sans-serif;">
+            <h2 style="margin:0; color:#0b5ea8; font-size:20px;">
                 Tongatapu Infrastructure Asset Replacement Cost Valuation
             </h2>
-            <p style="margin:6px 0 0; color:#555; font-size:14px;">
+            <p style="margin:4px 0 0; color:#555; font-size:13px;">
                 Infrastructure Exposure Modelling | Tongatapu - Tonga
             </p>
         </div>
 
         <div id="map"></div>
 
+        <!-- Summary Chart Box -->
+        <div id="chart-widget">
+            <h4>Total Asset Exposure Breakdown</h4>
+            <canvas id="assetChart" width="260" height="200"></canvas>
+        </div>
+
+        <!-- Collapsible Mini Instructions Box -->
         <div id="map-instructions">
-            <strong>Instructions</strong><br>
-            • Zoom to your area of interest and click on a grid cell to explore the replacement values of infrastructure assets within that grid.<br><br>
-            • To view the legend, click the <strong>Layers</strong> panel in the upper-right corner of the map.<br><br>
-            <span style="font-size: 11px; color: #666;">
-                <em>*Note: Each grid contains estimated replacement costs of all major assets, apart from agriculture (crops) and the airport runway, which are not included.</em>
-            </span>
+            <div id="instructions-header" onclick="toggleInstructions()">
+                <span>Instructions &amp; Info ℹ️</span>
+                <span id="toggle-icon">▼</span>
+            </div>
+            <div id="instructions-content">
+                • Zoom &amp; click any grid cell for asset costs.<br>
+                • Open upper-right <strong>Layers</strong> panel for legend.<br><br>
+                <span style="font-size: 10px; color: #666;">
+                    <em>*Excludes agriculture crops &amp; airport runway.</em>
+                </span>
+            </div>
         </div>
 
         <script src="js/qgis2web_expressions.js"></script>
@@ -69,6 +114,18 @@
         <script src="js/leaflet.photon.js"></script>
         <script src="data/AssetsreplacementcostUSD_1.js"></script>
         <script>
+        function toggleInstructions() {
+            var content = document.getElementById('instructions-content');
+            var icon = document.getElementById('toggle-icon');
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
         var map = L.map('map', {
             zoomControl:false, maxZoom:28, minZoom:1
         }).fitBounds([[-21.345313900499946,-175.49426775649917],[-21.017627044639426,-174.91178377093664]]);
@@ -222,6 +279,71 @@
         var lay = L.control.layers.tree(null, overlaysTree, { collapsed: true });
         lay.addTo(map);
         setBounds();
+
+        // Dynamic Chart Data Processing
+        function generateAssetChart() {
+            var totals = {
+                'Buildings': 0,
+                'Roads': 0,
+                'Power Infra': 0,
+                'Water Infra': 0,
+                'Port & Fuel': 0,
+                'Telecom': 0
+            };
+
+            if (typeof json_AssetsreplacementcostUSD_1 !== 'undefined' && json_AssetsreplacementcostUSD_1.features) {
+                json_AssetsreplacementcostUSD_1.features.forEach(function(f) {
+                    var p = f.properties;
+                    totals['Buildings'] += Number(p['Building cost']) || 0;
+                    totals['Roads'] += Number(p['Roads cost']) || 0;
+                    totals['Power Infra'] += (Number(p['Power lines costs']) || 0) + (Number(p['Power poles cost']) || 0) + (Number(p['Power assets costs']) || 0);
+                    totals['Water Infra'] += (Number(p['Water network cost']) || 0) + (Number(p['Water cost']) || 0);
+                    totals['Port & Fuel'] += (Number(p['Port facilities costs']) || 0) + (Number(p['Fuel facilities cost']) || 0);
+                    totals['Telecom'] += Number(p['Telecommunication cost']) || 0;
+                });
+            }
+
+            var ctx = document.getElementById('assetChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(totals),
+                    datasets: [{
+                        data: Object.values(totals),
+                        backgroundColor: [
+                            '#0b5ea8',
+                            '#36a2eb',
+                            '#ff6384',
+                            '#4bc0c0',
+                            '#ffcd56',
+                            '#9966ff'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                font: { size: 9 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    var val = context.raw || 0;
+                                    return context.label + ': $' + val.toLocaleString(undefined, {maximumFractionDigits: 0});
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        generateAssetChart();
         </script>
     </body>
 </html>
