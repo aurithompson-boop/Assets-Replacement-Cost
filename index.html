@@ -263,6 +263,39 @@
         });
         map.addLayer(layer_ESRISatellite_0);
 
+        // --- Helper Function: String Cost Value Parser ---
+        // Handles strings like "486.06k usd", "1.2M usd", or raw numbers
+        function parseCostValue(val) {
+            if (val === undefined || val === null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            
+            var str = String(val).toLowerCase().trim();
+            // Match digits and optional decimal
+            var match = str.match(/([0-9]+(\.[0-9]+)?)/);
+            if (!match) return 0;
+            
+            var num = parseFloat(match[1]);
+            if (isNaN(num)) return 0;
+            
+            if (str.includes('k')) {
+                num = num * 1000;
+            } else if (str.includes('m')) {
+                num = num * 1000000;
+            }
+            return num;
+        }
+
+        function getPropValue(props, possibleKeys) {
+            if (!props) return 0;
+            for (var i = 0; i < possibleKeys.length; i++) {
+                var k = possibleKeys[i];
+                if (props[k] !== undefined && props[k] !== null && props[k] !== '') {
+                    return parseCostValue(props[k]);
+                }
+            }
+            return 0;
+        }
+
         // --- Multi-Select & Popup Management ---
         var selectedLayers = [];
         var activePopup = L.popup();
@@ -294,17 +327,32 @@
 
             selectedLayers.forEach(function(l) {
                 var p = l.feature.properties;
-                totals.building += Number(p['Building cost']) || 0;
-                totals.fuel += Number(p['Fuel facilities cost']) || 0;
-                totals.port += Number(p['Port facilities costs']) || 0;
-                totals.waterNet += Number(p['Water network cost']) || 0;
-                totals.roads += Number(p['Roads cost']) || 0;
-                totals.powerLines += Number(p['Power lines costs']) || 0;
-                totals.powerPoles += Number(p['Power poles cost']) || 0;
-                totals.telecom += Number(p['Telecommunication cost']) || 0;
-                totals.powerAssets += Number(p['Power assets costs']) || 0;
-                totals.water += Number(p['Water cost']) || 0;
-                totals.total += Number(p['Total replacement cost']) || Number(p['q2wHide_Total_Replacement_Cost_Raw']) || Number(p['Total_Replacement_Cost']) || 0;
+                
+                var bldg = getPropValue(p, ['Building cost', 'Building_cost']);
+                var fuel = getPropValue(p, ['Fuel facilities cost', 'Fuel_facilities_cost']);
+                var port = getPropValue(p, ['Port facilities costs', 'Port facilities cost', 'Port_facilities_costs']);
+                var waterNet = getPropValue(p, ['Water network cost', 'Water_network_cost']);
+                var roads = getPropValue(p, ['Roads cost', 'Roads_cost']);
+                var powerLines = getPropValue(p, ['Power lines costs', 'Power lines cost', 'Power_lines_costs']);
+                var powerPoles = getPropValue(p, ['Power poles cost', 'Power_poles_cost']);
+                var telecom = getPropValue(p, ['Telecommunication cost', 'Telecommunication_cost']);
+                var powerAssets = getPropValue(p, ['Power assets costs', 'Power assets cost', 'Power_assets_costs']);
+                var water = getPropValue(p, ['Water cost', 'Water_cost']);
+                
+                var calcTotal = bldg + fuel + port + waterNet + roads + powerLines + powerPoles + telecom + powerAssets + water;
+                var rawTotal = getPropValue(p, ['Total replacement cost', 'Total_replacement_cost', 'q2wHide_Total_Replacement_Cost_Raw', 'Total_Replacement_Cost']);
+
+                totals.building += bldg;
+                totals.fuel += fuel;
+                totals.port += port;
+                totals.waterNet += waterNet;
+                totals.roads += roads;
+                totals.powerLines += powerLines;
+                totals.powerPoles += powerPoles;
+                totals.telecom += telecom;
+                totals.powerAssets += powerAssets;
+                totals.water += water;
+                totals.total += (rawTotal > 0 ? rawTotal : calcTotal);
             });
 
             var headerText = selectedLayers.length === 1 ? 'Grid Cost Valuation' : 'Selected Grids: ' + selectedLayers.length;
@@ -356,7 +404,9 @@
         }
 
         function style_AssetsreplacementcostUSD_1_0(feature) {
-            var val = feature.properties['q2wHide_Total_Replacement_Cost_Raw'] || feature.properties['Total replacement cost'] || feature.properties['Total_Replacement_Cost'] || 0;
+            var p = feature.properties;
+            var val = getPropValue(p, ['Total replacement cost', 'Total_replacement_cost', 'q2wHide_Total_Replacement_Cost_Raw', 'Total_Replacement_Cost']);
+            
             if (val >= 0.0 && val <= 245327.8) {
                 return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
             }
@@ -383,16 +433,15 @@
             interactive: true,
             pane: 'pane_AssetsreplacementcostUSD_1',
             onEachFeature: function(feature, layer) {
-                // Attach click listener
                 layer.on({
                     click: onGridClick
                 });
 
                 // Attach directly rendered on-map grid value labels
                 var p = feature.properties;
-                var rawVal = p['Total replacement cost'] || p['Total_Replacement_Cost'] || p['q2wHide_Total_Replacement_Cost_Raw'];
+                var rawVal = getPropValue(p, ['Total replacement cost', 'Total_replacement_cost', 'q2wHide_Total_Replacement_Cost_Raw', 'Total_Replacement_Cost']);
                 
-                if (rawVal !== undefined && rawVal !== null && rawVal > 0) {
+                if (rawVal > 0) {
                     var displayVal = formatCurrency(rawVal);
                     layer.bindTooltip(displayVal, {
                         permanent: true,
@@ -429,12 +478,16 @@
             if (typeof json_AssetsreplacementcostUSD_1 !== 'undefined' && json_AssetsreplacementcostUSD_1.features) {
                 json_AssetsreplacementcostUSD_1.features.forEach(function(f) {
                     var p = f.properties;
-                    totals['Buildings'] += Number(p['Building cost']) || 0;
-                    totals['Roads'] += Number(p['Roads cost']) || 0;
-                    totals['Power Infra'] += (Number(p['Power lines costs']) || 0) + (Number(p['Power poles cost']) || 0) + (Number(p['Power assets costs']) || 0);
-                    totals['Water Infra'] += (Number(p['Water network cost']) || 0) + (Number(p['Water cost']) || 0);
-                    totals['Port & Fuel'] += (Number(p['Port facilities costs']) || 0) + (Number(p['Fuel facilities cost']) || 0);
-                    totals['Telecom'] += Number(p['Telecommunication cost']) || 0;
+                    totals['Buildings'] += getPropValue(p, ['Building cost', 'Building_cost']);
+                    totals['Roads'] += getPropValue(p, ['Roads cost', 'Roads_cost']);
+                    totals['Power Infra'] += getPropValue(p, ['Power lines costs', 'Power lines cost', 'Power_lines_costs']) +
+                                             getPropValue(p, ['Power poles cost', 'Power_poles_cost']) +
+                                             getPropValue(p, ['Power assets costs', 'Power assets cost', 'Power_assets_costs']);
+                    totals['Water Infra'] += getPropValue(p, ['Water network cost', 'Water_network_cost']) +
+                                             getPropValue(p, ['Water cost', 'Water_cost']);
+                    totals['Port & Fuel'] += getPropValue(p, ['Port facilities costs', 'Port facilities cost', 'Port_facilities_costs']) +
+                                             getPropValue(p, ['Fuel facilities cost', 'Fuel_facilities_cost']);
+                    totals['Telecom'] += getPropValue(p, ['Telecommunication cost', 'Telecommunication_cost']);
                 });
             }
 
