@@ -15,9 +15,14 @@
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <title>Tongatapu Infrastructure Asset Replacement Cost Valuation</title>
         <style>
-            #map {
+            html, body, #map {
                 width: 100%;
-                height: 90vh;
+                height: 100%;
+                padding: 0;
+                margin: 0;
+            }
+            #map {
+                height: calc(100vh - 60px);
             }
             
             /* Floating Info Button */
@@ -133,14 +138,32 @@
                 color: #0b5ea8;
                 text-align: center;
             }
+
+            .popup-table {
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                border-collapse: collapse;
+                width: 100%;
+            }
+            .popup-table th {
+                text-align: left;
+                padding: 3px 6px;
+                color: #333;
+            }
+            .popup-table td {
+                text-align: right;
+                padding: 3px 6px;
+                color: #0b5ea8;
+                font-weight: bold;
+            }
         </style>
     </head>
     <body>
-        <div style="text-align:center; background:#ffffff; padding:12px; border-bottom:2px solid #0b5ea8; font-family:Arial, sans-serif;">
-            <h2 style="margin:0; color:#0b5ea8; font-size:20px;">
+        <div style="text-align:center; background:#ffffff; padding:10px; border-bottom:2px solid #0b5ea8; font-family:Arial, sans-serif;">
+            <h2 style="margin:0; color:#0b5ea8; font-size:18px;">
                 Tongatapu Infrastructure Asset Replacement Cost Valuation
             </h2>
-            <p style="margin:4px 0 0; color:#555; font-size:13px;">
+            <p style="margin:2px 0 0; color:#555; font-size:12px;">
                 Infrastructure Exposure Modelling | Tongatapu - Tonga
             </p>
         </div>
@@ -157,12 +180,12 @@
                 <h3>ℹ️ How to Use the Map</h3>
                 <ul>
                     <li><strong>Single Click:</strong> View total cost breakdown for a single grid cell.</li>
-                    <li><strong>Shift + Click:</strong> Hold <kbd>Shift</kbd> and click multiple cells to select or deselect them. The popup will dynamically sum total replacement costs across all selected grids.</li>
-                    <li><strong>Clear Selection:</strong> Click the red "Clear Selection" button inside the grid popup window to reset highlights.</li>
-                    <li><strong>Layer Legend:</strong> Use the upper-right <strong>Layers</strong> control to toggle maps and view the color scale legend.</li>
+                    <li><strong>Shift + Click:</strong> Hold <kbd>Shift</kbd> and click multiple cells to select or deselect them. Total replacement costs will dynamically calculate across all selected grids.</li>
+                    <li><strong>Clear Selection:</strong> Click the red "Clear Selection" button in the popup to reset highlighted grids.</li>
+                    <li><strong>Layer Legend:</strong> Use the upper-right <strong>Layers</strong> control to toggle maps and view the color scale.</li>
                 </ul>
-                <div style="margin-top: 12px; font-size: 11px; color: #666; border-top: 1px solid #eee; padding-top: 8px;">
-                    <em>*Excludes agriculture crops &amp; airport runway.</em>
+                <div style="margin-top: 12px; font-size: 11px; color: #555; border-top: 1px solid #eee; padding-top: 8px; font-style: italic;">
+                    *Note: Each grid contains estimated replacement costs of all major assets, apart from agriculture (crops) and the airport runway, which are not included.
                 </div>
             </div>
         </div>
@@ -170,7 +193,10 @@
         <!-- Summary Chart Box -->
         <div id="chart-widget">
             <h4>Total Asset Exposure Breakdown</h4>
-            <canvas id="assetChart" width="260" height="200"></canvas>
+            <canvas id="assetChart" width="260" height="170"></canvas>
+            <p style="margin: 8px 0 0 0; font-size: 10px; color: #555; line-height: 1.35; font-style: italic; text-align: center; border-top: 1px solid #eee; padding-top: 6px;">
+                *Note: Each grid contains estimated replacement costs of all major assets, apart from agriculture (crops) and the airport runway, which are not included.
+            </p>
         </div>
 
         <script src="js/qgis2web_expressions.js"></script>
@@ -209,7 +235,6 @@
 
         var zoomControl = L.control.zoom({ position: 'topleft' }).addTo(map);
         var bounds_group = new L.featureGroup([]);
-        function setBounds() {}
 
         map.createPane('pane_ESRISatellite_0');
         map.getPane('pane_ESRISatellite_0').style.zIndex = 400;
@@ -224,9 +249,9 @@
         });
         map.addLayer(layer_ESRISatellite_0);
 
-        // --- Multi-Select State Management ---
+        // --- Multi-Select & Popup Management ---
         var selectedLayers = [];
-        var multiPopup = L.popup();
+        var activePopup = L.popup();
 
         function clearSelections() {
             selectedLayers.forEach(function(l) {
@@ -236,7 +261,12 @@
             map.closePopup();
         }
 
-        function updateMultiSelectionPopup(latlng) {
+        function formatCurrency(val) {
+            var num = Number(val) || 0;
+            return '$' + num.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+
+        function updateSelectionPopup(latlng) {
             if (selectedLayers.length === 0) {
                 map.closePopup();
                 return;
@@ -260,38 +290,39 @@
                 totals.telecom += Number(p['Telecommunication cost']) || 0;
                 totals.powerAssets += Number(p['Power assets costs']) || 0;
                 totals.water += Number(p['Water cost']) || 0;
-                totals.total += Number(p['Total replacement cost']) || 0;
+                totals.total += Number(p['Total replacement cost']) || Number(p['q2wHide_Total_Replacement_Cost_Raw']) || 0;
             });
 
-            var content = '<div style="font-family:Arial, sans-serif; font-size:12px;">' +
-                '<strong style="color:#0b5ea8; font-size:13px;">Selected Grids: ' + selectedLayers.length + '</strong><hr style="margin:5px 0;">' +
-                '<table>' +
-                '<tr><th>Building cost:</th><td>$' + totals.building.toLocaleString() + '</td></tr>' +
-                '<tr><th>Fuel facilities cost:</th><td>$' + totals.fuel.toLocaleString() + '</td></tr>' +
-                '<tr><th>Port facilities cost:</th><td>$' + totals.port.toLocaleString() + '</td></tr>' +
-                '<tr><th>Water network cost:</th><td>$' + totals.waterNet.toLocaleString() + '</td></tr>' +
-                '<tr><th>Roads cost:</th><td>$' + totals.roads.toLocaleString() + '</td></tr>' +
-                '<tr><th>Power lines cost:</th><td>$' + totals.powerLines.toLocaleString() + '</td></tr>' +
-                '<tr><th>Power poles cost:</th><td>$' + totals.powerPoles.toLocaleString() + '</td></tr>' +
-                '<tr><th>Telecommunication cost:</th><td>$' + totals.telecom.toLocaleString() + '</td></tr>' +
-                '<tr><th>Power assets cost:</th><td>$' + totals.powerAssets.toLocaleString() + '</td></tr>' +
-                '<tr><th>Water cost:</th><td>$' + totals.water.toLocaleString() + '</td></tr>' +
-                '<tr style="font-weight:bold; border-top:1px solid #ccc;"><th>Total replacement cost:</th><td style="color:#0b5ea8;">$' + totals.total.toLocaleString() + '</td></tr>' +
+            var headerText = selectedLayers.length === 1 ? 'Grid Cost Valuation' : 'Selected Grids: ' + selectedLayers.length;
+
+            var content = '<div style="font-family:Arial, sans-serif; font-size:12px; min-width:210px;">' +
+                '<strong style="color:#0b5ea8; font-size:13px;">' + headerText + '</strong><hr style="margin:5px 0;">' +
+                '<table class="popup-table">' +
+                '<tr><th>Building cost:</th><td>' + formatCurrency(totals.building) + '</td></tr>' +
+                '<tr><th>Fuel facilities cost:</th><td>' + formatCurrency(totals.fuel) + '</td></tr>' +
+                '<tr><th>Port facilities cost:</th><td>' + formatCurrency(totals.port) + '</td></tr>' +
+                '<tr><th>Water network cost:</th><td>' + formatCurrency(totals.waterNet) + '</td></tr>' +
+                '<tr><th>Roads cost:</th><td>' + formatCurrency(totals.roads) + '</td></tr>' +
+                '<tr><th>Power lines cost:</th><td>' + formatCurrency(totals.powerLines) + '</td></tr>' +
+                '<tr><th>Power poles cost:</th><td>' + formatCurrency(totals.powerPoles) + '</td></tr>' +
+                '<tr><th>Telecommunication cost:</th><td>' + formatCurrency(totals.telecom) + '</td></tr>' +
+                '<tr><th>Power assets cost:</th><td>' + formatCurrency(totals.powerAssets) + '</td></tr>' +
+                '<tr><th>Water cost:</th><td>' + formatCurrency(totals.water) + '</td></tr>' +
+                '<tr style="font-weight:bold; border-top:1px solid #ccc; font-size:13px;"><th>Total replacement cost:</th><td style="color:#0b5ea8;">' + formatCurrency(totals.total) + '</td></tr>' +
                 '</table>' +
-                '<button onclick="clearSelections()" style="margin-top:8px; width:100%; background:#d9534f; color:#fff; border:none; padding:4px; border-radius:4px; cursor:pointer;">Clear Selection</button>' +
+                (selectedLayers.length > 1 ? '<button onclick="clearSelections()" style="margin-top:8px; width:100%; background:#d9534f; color:#fff; border:none; padding:5px; border-radius:4px; cursor:pointer;">Clear Selection</button>' : '') +
                 '</div>';
 
-            multiPopup.setLatLng(latlng).setContent(content).openOn(map);
+            activePopup.setLatLng(latlng).setContent(content).openOn(map);
         }
 
         function onGridClick(e) {
             var layer = e.target;
-            var isShiftPressed = e.originalEvent.shiftKey;
+            var isShiftPressed = e.originalEvent && e.originalEvent.shiftKey;
 
             var index = selectedLayers.indexOf(layer);
 
             if (isShiftPressed) {
-                // Multi-select mode
                 if (index > -1) {
                     selectedLayers.splice(index, 1);
                     layer_AssetsreplacementcostUSD_1.resetStyle(layer);
@@ -300,7 +331,6 @@
                     layer.setStyle({ stroke: true, color: '#FFD700', weight: 3, opacity: 1 });
                 }
             } else {
-                // Single select mode
                 selectedLayers.forEach(function(l) {
                     layer_AssetsreplacementcostUSD_1.resetStyle(l);
                 });
@@ -308,42 +338,42 @@
                 layer.setStyle({ stroke: true, color: '#FFD700', weight: 3, opacity: 1 });
             }
 
-            updateMultiSelectionPopup(e.latlng);
+            updateSelectionPopup(e.latlng);
         }
 
         function style_AssetsreplacementcostUSD_1_0(feature) {
-            var val = feature.properties['q2wHide_Total_Replacement_Cost_Raw'];
+            var val = feature.properties['q2wHide_Total_Replacement_Cost_Raw'] || feature.properties['Total replacement cost'] || 0;
             if (val >= 0.0 && val <= 245327.8) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 1, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
             }
             if (val >= 245327.8 && val <= 821165.9) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 1, fillColor: 'rgba(200,220,240,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(200,220,240,1.0)', interactive: true };
             }
             if (val >= 821165.9 && val <= 1997189.87) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 1, fillColor: 'rgba(115,178,216,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(115,178,216,1.0)', interactive: true };
             }
             if (val >= 1997189.87 && val <= 7374635.36) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 1, fillColor: 'rgba(41,121,185,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(41,121,185,1.0)', interactive: true };
             }
             if (val >= 7374635.36 && val <= 29387441.48) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 1, fillColor: 'rgba(8,48,107,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(8,48,107,1.0)', interactive: true };
             }
+            return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
         }
 
         map.createPane('pane_AssetsreplacementcostUSD_1');
         map.getPane('pane_AssetsreplacementcostUSD_1').style.zIndex = 401;
-        map.getPane('pane_AssetsreplacementcostUSD_1').style['mix-blend-mode'] = 'normal';
 
         var layer_AssetsreplacementcostUSD_1 = new L.geoJson(json_AssetsreplacementcostUSD_1, {
             attribution: '',
             interactive: true,
-            dataVar: 'json_AssetsreplacementcostUSD_1',
-            layerName: 'layer_AssetsreplacementcostUSD_1',
             pane: 'pane_AssetsreplacementcostUSD_1',
             onEachFeature: function(feature, layer) {
-                layer.on('click', onGridClick);
+                layer.on({
+                    click: onGridClick
+                });
             },
-            style: style_AssetsreplacementcostUSD_1_0,
+            style: style_AssetsreplacementcostUSD_1_0
         });
 
         bounds_group.addLayer(layer_AssetsreplacementcostUSD_1);
@@ -356,9 +386,8 @@
 
         var lay = L.control.layers.tree(null, overlaysTree, { collapsed: true });
         lay.addTo(map);
-        setBounds();
 
-        // Chart Data Processing
+        // --- Chart.js Asset Breakdown ---
         function generateAssetChart() {
             var totals = {
                 'Buildings': 0,
@@ -381,7 +410,10 @@
                 });
             }
 
-            var ctx = document.getElementById('assetChart').getContext('2d');
+            var canvas = document.getElementById('assetChart');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+
             new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -400,6 +432,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
                             position: 'bottom',
@@ -421,7 +454,10 @@
             });
         }
 
-        generateAssetChart();
+        // Run chart creation on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            generateAssetChart();
+        });
         </script>
     </body>
 </html>
