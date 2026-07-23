@@ -156,6 +156,20 @@
                 color: #0b5ea8;
                 font-weight: bold;
             }
+
+            /* Custom Grid On-Map Value Label Styling */
+            .grid-cost-label {
+                background: transparent;
+                border: none;
+                box-shadow: none;
+                font-family: Arial, sans-serif;
+                font-size: 10px;
+                font-weight: bold;
+                color: #111111;
+                text-shadow: 1px 1px 2px #ffffff, -1px -1px 2px #ffffff, 1px -1px 2px #ffffff, -1px 1px 2px #ffffff;
+                text-align: center;
+                pointer-events: none;
+            }
         </style>
     </head>
     <body>
@@ -290,7 +304,7 @@
                 totals.telecom += Number(p['Telecommunication cost']) || 0;
                 totals.powerAssets += Number(p['Power assets costs']) || 0;
                 totals.water += Number(p['Water cost']) || 0;
-                totals.total += Number(p['Total replacement cost']) || Number(p['q2wHide_Total_Replacement_Cost_Raw']) || 0;
+                totals.total += Number(p['Total replacement cost']) || Number(p['q2wHide_Total_Replacement_Cost_Raw']) || Number(p['Total_Replacement_Cost']) || 0;
             });
 
             var headerText = selectedLayers.length === 1 ? 'Grid Cost Valuation' : 'Selected Grids: ' + selectedLayers.length;
@@ -342,23 +356,23 @@
         }
 
         function style_AssetsreplacementcostUSD_1_0(feature) {
-            var val = feature.properties['q2wHide_Total_Replacement_Cost_Raw'] || feature.properties['Total replacement cost'] || 0;
+            var val = feature.properties['q2wHide_Total_Replacement_Cost_Raw'] || feature.properties['Total replacement cost'] || feature.properties['Total_Replacement_Cost'] || 0;
             if (val >= 0.0 && val <= 245327.8) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
             }
             if (val >= 245327.8 && val <= 821165.9) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(200,220,240,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(200,220,240,1.0)', interactive: true };
             }
             if (val >= 821165.9 && val <= 1997189.87) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(115,178,216,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(115,178,216,1.0)', interactive: true };
             }
             if (val >= 1997189.87 && val <= 7374635.36) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(41,121,185,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(41,121,185,1.0)', interactive: true };
             }
             if (val >= 7374635.36 && val <= 29387441.48) {
-                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(8,48,107,1.0)', interactive: true };
+                return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(8,48,107,1.0)', interactive: true };
             }
-            return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: false, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
+            return { pane: 'pane_AssetsreplacementcostUSD_1', stroke: true, color: '#ffffff', weight: 0.5, opacity: 0.5, fill: true, fillOpacity: 0.7, fillColor: 'rgba(224,238,252,1.0)', interactive: true };
         }
 
         map.createPane('pane_AssetsreplacementcostUSD_1');
@@ -369,9 +383,23 @@
             interactive: true,
             pane: 'pane_AssetsreplacementcostUSD_1',
             onEachFeature: function(feature, layer) {
+                // Attach click listener
                 layer.on({
                     click: onGridClick
                 });
+
+                // Attach directly rendered on-map grid value labels
+                var p = feature.properties;
+                var rawVal = p['Total replacement cost'] || p['Total_Replacement_Cost'] || p['q2wHide_Total_Replacement_Cost_Raw'];
+                
+                if (rawVal !== undefined && rawVal !== null && rawVal > 0) {
+                    var displayVal = formatCurrency(rawVal);
+                    layer.bindTooltip(displayVal, {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'grid-cost-label'
+                    });
+                }
             },
             style: style_AssetsreplacementcostUSD_1_0
         });
